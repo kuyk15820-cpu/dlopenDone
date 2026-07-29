@@ -205,27 +205,12 @@
 #pragma mark - Actions
 
 - (void)selectDylibTapped {
-    UIDocumentPickerViewController *picker = nil;
-    
-    if (@available(iOS 14.0, *)) {
-        UTType *dylibType = [UTType typeWithFilenameExtension:@"dylib" conformingToType:UTTypeData];
-        UTType *binType = [UTType typeWithFilenameExtension:@"dylib" conformingToType:UTTypeItem];
-        
-        NSMutableArray *types = [NSMutableArray array];
-        if (dylibType) [types addObject:dylibType];
-        if (binType) [types addObject:binType];
-        [types addObject:UTTypeData];
-        [types addObject:UTTypeItem];
-        
-        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:YES];
-    } else {
-        picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data", @"public.item", @"com.apple.mach-o-binary"] inMode:UIDocumentPickerModeImport];
-    }
-    
+    NSArray<NSString *> *types = @[@"public.data"];
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types
+                                                                                                   inMode:UIDocumentPickerModeImport];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
-    picker.modalPresentationStyle = UIModalPresentationPageSheet;
-    
+    picker.modalPresentationStyle = UIModalPresentationFormSheet;
     [self presentViewController:picker animated:YES completion:nil];
 }
 
@@ -277,19 +262,55 @@
 
 #pragma mark - UIDocumentPickerDelegate
 
-- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
-    NSURL *url = urls.firstObject;
+- (void)handlePickedDylibURL:(NSURL *)url {
     if (!url) return;
-    
-    // บันทึก Path ของไฟล์ .dylib
-    self.selectedDylibPath = url.path;
-    self.statusLabel.text = [NSString stringWithFormat:@"File: %@", url.lastPathComponent];
-    self.statusLabel.textColor = [UIColor labelColor];
-    
-    self.injectButton.enabled = YES;
-    self.injectButton.alpha = 1.0;
-    
-    [self appendLog:[NSString stringWithFormat:@"Selected: %@", url.path]];
+
+    if (![[[url pathExtension] lowercaseString] isEqualToString:@"dylib"]) {
+        [self appendLog:[NSString stringWithFormat:@"❌ Invalid file extension: %@", url.lastPathComponent]];
+        return;
+    }
+
+    BOOL accessing = [url startAccessingSecurityScopedResource];
+
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsDir = paths.firstObject;
+    NSString *destPath = [documentsDir stringByAppendingPathComponent:@"selected_target.dylib"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    NSError *error = nil;
+    if ([fm fileExistsAtPath:destPath]) {
+        [fm removeItemAtPath:destPath error:&error];
+    }
+
+    NSURL *destURL = [NSURL fileURLWithPath:destPath];
+    if (![fm copyItemAtURL:url toURL:destURL error:&error]) {
+        [self appendLog:[NSString stringWithFormat:@"❌ Copy dylib failed: %@", error.localizedDescription]];
+    } else {
+        self.selectedDylibPath = destPath;
+        self.statusLabel.text = [NSString stringWithFormat:@"File: %@", url.lastPathComponent];
+        self.statusLabel.textColor = [UIColor labelColor];
+        
+        self.injectButton.enabled = YES;
+        self.injectButton.alpha = 1.0;
+        
+        [self appendLog:[NSString stringWithFormat:@"Selected: %@", destPath]];
+    }
+
+    if (accessing) {
+        [url stopAccessingSecurityScopedResource];
+    }
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    [self handlePickedDylibURL:urls.firstObject];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
+    [self handlePickedDylibURL:url];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    [controller dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end
