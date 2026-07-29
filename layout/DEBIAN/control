@@ -1,0 +1,9 @@
+Package: com.apple.f1x3r.fxtool
+Name: FXTool
+Depends: apple.uikit
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: none
+Maintainer: F1X3R
+Author: F1X3R
+Section: Utilities
