@@ -205,9 +205,27 @@
 #pragma mark - Actions
 
 - (void)selectDylibTapped {
-    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[[UTType typeWithFilenameExtension:@"dylib" conformingToType:UTTypeData]] asCopy:YES];
+    UIDocumentPickerViewController *picker = nil;
+    
+    if (@available(iOS 14.0, *)) {
+        UTType *dylibType = [UTType typeWithFilenameExtension:@"dylib" conformingToType:UTTypeData];
+        UTType *binType = [UTType typeWithFilenameExtension:@"dylib" conformingToType:UTTypeItem];
+        
+        NSMutableArray *types = [NSMutableArray array];
+        if (dylibType) [types addObject:dylibType];
+        if (binType) [types addObject:binType];
+        [types addObject:UTTypeData];
+        [types addObject:UTTypeItem];
+        
+        picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:YES];
+    } else {
+        picker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data", @"public.item", @"com.apple.mach-o-binary"] inMode:UIDocumentPickerModeImport];
+    }
+    
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
+    picker.modalPresentationStyle = UIModalPresentationPageSheet;
+    
     [self presentViewController:picker animated:YES completion:nil];
 }
 
